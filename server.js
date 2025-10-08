@@ -6,8 +6,8 @@ app.use(express.json({ limit: "5mb" }));
 
 // Setup SMTP2GO transport
 const transporter = nodemailer.createTransport({
-  host: "mail.smtp2go.com",
-  port: 587,
+  host: "smtp.resend.com",
+  port: 465,
   secure: false,
   auth: {
     user: process.env.SMTP2GO_USER,
