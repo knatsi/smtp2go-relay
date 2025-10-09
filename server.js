@@ -17,7 +17,7 @@ app.post("/send-email", async (req, res) => {
     }
 
     const data = await resend.emails.send({
-      from: "Schema-App <no-reply@yourdomain.com>",
+      from: "onboarding@resend.dev",
       to,
       subject: subject || "Arbetsschema .ics",
       html: `<p>Hej,</p><p>Här är ditt arbetsschema som kalenderfil.</p>`,
