@@ -1,13 +1,12 @@
 {
   "name": "smtp2go-relay",
-  "version": "1.0.0",
   "type": "module",
-  "main": "server.js",
-  "scripts": {
-    "start": "node server.js"
-  },
   "dependencies": {
     "express": "^4.19.2",
-    "nodemailer": "^6.9.13"
+    "body-parser": "^1.20.3",
+    "resend": "^2.1.0"
+  },
+  "scripts": {
+    "start": "node server.js"
   }
 }
