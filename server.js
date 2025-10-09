@@ -1,35 +1,52 @@
 import express from "express";
 import cors from "cors";
 import bodyParser from "body-parser";
-import { Resend } from "resend";
+import nodemailer from "nodemailer";
 
 const app = express();
 app.use(cors());
 app.use(bodyParser.json({ limit: "5mb" }));
 
-const resend = new Resend(process.env.RESEND_API_KEY);
+// Configure Gmail SMTP transport
+const transporter = nodemailer.createTransport({
+  service: "gmail",
+  auth: {
+    user: process.env.SMTP_USER,
+    pass: process.env.SMTP_PASS,
+  },
+});
 
 app.post("/send-email", async (req, res) => {
   try {
     const { to, subject, icsContent } = req.body;
-    if (!to || !icsContent) {
-      return res.status(400).json({ error: "Missing 'to' or 'icsContent'" });
+    if (!to || !subject) {
+      return res.status(400).json({ error: "Missing 'to' or 'subject'" });
     }
 
-    const data = await resend.emails.send({
-      from: "onboarding@resend.dev",
+    const mailOptions = {
+      from: `"Schema App" <${process.env.SMTP_USER}>`,
       to,
-      subject: subject || "Arbetsschema .ics",
-      html: `<p>Hej,</p><p>Här är ditt arbetsschema som kalenderfil.</p>`,
-      attachments: [{ filename: "schema.ics", content: icsContent }],
-    });
+      subject,
+      text: "Hej! Här är ditt arbetsschema som kalenderfil.",
+      attachments: icsContent
+        ? [
+            {
+              filename: "schema.ics",
+              content: icsContent,
+            },
+          ]
+        : [],
+    };
 
-    res.json({ success: true, data });
+    const info = await transporter.sendMail(mailOptions);
+    console.log("✅ Email sent:", info.messageId);
+
+    res.json({ success: true });
   } catch (err) {
-    console.error("Resend error:", err);
-    res.status(500).json({ error: "Mail send failed", details: err.message });
+    console.error("❌ Mail error:", err);
+    res.status(500).json({ error: err.message });
   }
 });
 
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+app.listen(PORT, () => console.log(`📬 Server running on port ${PORT}`));
