@@ -1,0 +1,39 @@
+name: Update project views
+
+on:
+  workflow_dispatch:
+    inputs:
+      project_id:
+        description: 'The project ID to increment'
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  update-views:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Increment view counter
+        run: |
+          FILE="data/views.json"
+          PROJECT_ID="${{ github.event.inputs.project_id }}"
+          mkdir -p data
+          if [ ! -f "$FILE" ]; then echo "{}" > "$FILE"; fi
+
+          # Increment the counter
+          TMP=$(mktemp)
+          jq --arg id "$PROJECT_ID" \
+             '.[$id] = (.[$id] // 0) + 1' "$FILE" > "$TMP" && mv "$TMP" "$FILE"
+
+      - name: Commit and push changes
+        run: |
+          git config user.name "github-actions"
+          git config user.email "actions@github.com"
+          git add data/views.json
+          git commit -m "Increment views for ${{ github.event.inputs.project_id }}" || echo "No changes to commit"
+          git push
