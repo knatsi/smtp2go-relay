@@ -1,39 +1,44 @@
-name: Update project views
+name: Aggregate Views
 
 on:
-  workflow_dispatch:
-    inputs:
-      project_id:
-        description: 'The project ID to increment'
-        required: true
-        type: string
+  schedule:
+    - cron: "0 * * * *"   # every hour
+  workflow_dispatch:      # manual run possible
 
 permissions:
   contents: write
+  issues: read
 
 jobs:
-  update-views:
+  update:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repo
         uses: actions/checkout@v4
 
-      - name: Increment view counter
+      - name: Install jq
+        run: sudo apt-get install jq -y
+
+      - name: Fetch issue comments
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          FILE="data/views.json"
-          PROJECT_ID="${{ github.event.inputs.project_id }}"
+          echo "Fetching comments..."
+          gh api repos/${{ github.repository }}/issues/1/comments > comments.json
+          cat comments.json | jq -r '.[].body' | grep '^view:' | cut -d':' -f2 > views.txt
+          
+          # Count each project
+          awk '{count[$1]++} END {for (p in count) print p, count[p]}' views.txt > counts.txt
+
           mkdir -p data
-          if [ ! -f "$FILE" ]; then echo "{}" > "$FILE"; fi
+          echo "{" > data/views.json
+          awk '{printf "\"%s\": %d,\n", $1, $2}' counts.txt >> data/views.json
+          echo "\"_updated\": \"$(date -u +%Y-%m-%dT%H:%M:%SZ)\"}" >> data/views.json
 
-          # Increment the counter
-          TMP=$(mktemp)
-          jq --arg id "$PROJECT_ID" \
-             '.[$id] = (.[$id] // 0) + 1' "$FILE" > "$TMP" && mv "$TMP" "$FILE"
-
-      - name: Commit and push changes
+      - name: Commit and push
         run: |
-          git config user.name "github-actions"
-          git config user.email "actions@github.com"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add data/views.json
-          git commit -m "Increment views for ${{ github.event.inputs.project_id }}" || echo "No changes to commit"
+          git commit -m "Update aggregated views" || echo "No changes"
           git push
