@@ -1,44 +1,63 @@
 name: Aggregate Views
-
 on:
   schedule:
     - cron: "0 * * * *"   # every hour
   workflow_dispatch:      # manual run possible
-
 permissions:
   contents: write
   issues: read
-
 jobs:
   update:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repo
         uses: actions/checkout@v4
-
+      
       - name: Install jq
         run: sudo apt-get install jq -y
-
+      
       - name: Fetch issue comments
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           echo "Fetching comments..."
           gh api repos/${{ github.repository }}/issues/1/comments > comments.json
+          
+          # Extract view lines
           cat comments.json | jq -r '.[].body' | grep '^view:' | cut -d':' -f2 > views.txt
           
+          # Check if we have any views
+          if [ ! -s views.txt ]; then
+            echo "No views found"
+            mkdir -p data
+            echo '{"_updated": "'$(date -u +%Y-%m-%dT%H:%M:%SZ)'"}' > data/views.json
+            exit 0
+          fi
+          
           # Count each project
-          awk '{count[$1]++} END {for (p in count) print p, count[p]}' views.txt > counts.txt
-
+          awk '{count[$1]++} END {for (p in count) print p, count[p]}' views.txt | sort > counts.txt
+          
+          # Build valid JSON
           mkdir -p data
           echo "{" > data/views.json
-          awk '{printf "\"%s\": %d,\n", $1, $2}' counts.txt >> data/views.json
-          echo "\"_updated\": \"$(date -u +%Y-%m-%dT%H:%M:%SZ)\"}" >> data/views.json
-
+          awk 'NR>1{print ","} {printf "  \"%s\": %d", $1, $2}' counts.txt >> data/views.json
+          echo "," >> data/views.json
+          echo "  \"_updated\": \"$(date -u +%Y-%m-%dT%H:%M:%SZ)\"" >> data/views.json
+          echo "}" >> data/views.json
+          
+          # Validate JSON
+          jq empty data/views.json && echo "JSON is valid" || echo "JSON is invalid!"
+      
       - name: Commit and push
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add data/views.json
-          git commit -m "Update aggregated views" || echo "No changes"
-          git push
+          
+          # Only commit if there are changes
+          if git diff --staged --quiet; then
+            echo "No changes to commit"
+          else
+            git commit -m "Update aggregated views [$(date -u +%Y-%m-%d\ %H:%M:%S) UTC]"
+            git push
+          fi
